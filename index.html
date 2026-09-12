@@ -38,7 +38,11 @@ body {
 }
 main { max-width: 560px; margin: 0 auto; padding: 28px 16px 48px; }
 h1 { font-family: var(--serif); font-size: 1.6rem; font-weight: 700; letter-spacing: .02em; margin: 0 0 4px; }
-.lead { color: var(--muted); margin: 0 0 22px; font-size: 0.92rem; padding-bottom: 14px; border-bottom: 1px dashed var(--line); }
+.lead { color: var(--muted); margin: 0 0 14px; font-size: 0.92rem; }
+.intro { margin: 0 0 10px; font-size: 0.95rem; }
+.intro-points { list-style: none; margin: 0 0 22px; padding: 0 0 14px; border-bottom: 1px dashed var(--line); }
+.intro-points li { position: relative; padding-left: 18px; margin: 6px 0; font-size: 0.88rem; color: var(--muted); }
+.intro-points li::before { content: "◆"; position: absolute; left: 0; top: 0.15em; color: var(--gold); font-size: 0.65em; }
 section.card {
   background: var(--card);
   border: 1px solid var(--line);
@@ -131,6 +135,12 @@ footer button { margin-top: 12px; }
 <main>
   <h1>スタレ ガチャ計画プランナー</h1>
   <p class="lead">次のピックアップに、いまの貯蓄で間に合うか。</p>
+  <p class="intro">天井計算機の「確率○%」だけでは、結局あと何連必要なのか分かりません。このツールは、いまの星玉と毎日の収入から、目標日に何連回せるか・確定まで何連足りないかを、数字でそのまま出します。</p>
+  <ul class="intro-points">
+    <li>確率ではなく、連数と星玉数でそのまま答える</li>
+    <li>すり抜け保証の有無も自動で反映する</li>
+    <li>いま開催中のガチャに使っても、次の目標に間に合うか判定できる</li>
+  </ul>
 
   <form id="form" autocomplete="off">
     <section class="card">
