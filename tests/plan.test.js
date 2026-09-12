@@ -89,6 +89,23 @@ test('plan: 使う予定が手持ちを超えたら警告を出す', () => {
   assert.equal(r.verdict, 'short');
 });
 
+test('plan: 仮天井（最初の5★・当たり確率50%）までの連数は 90 − 天井', () => {
+  const r = Calc.plan({ ...base, pity: 30 });
+  assert.equal(r.softPityNeeded, 60);
+});
+
+test('plan: 仮天井の不足連数は 使える連数 との差', () => {
+  const r = Calc.plan({ ...base, jade: 10 * 160, pity: 30 });
+  assert.equal(r.usablePulls, 10);
+  assert.equal(r.softPityNeeded, 60);
+  assert.equal(r.softPityShortfall, 50);
+});
+
+test('plan: 使える連数が仮天井以上なら仮天井の不足は 0', () => {
+  const r = Calc.plan({ ...base, jade: 60 * 160, pity: 30 });
+  assert.equal(r.softPityShortfall, 0);
+});
+
 test('plan: 目標日が過去でも落ちない（残り日数 0）', () => {
   const r = Calc.plan({ ...base, targetDate: '2020-01-01' });
   assert.equal(r.daysLeft, 0);
