@@ -4,7 +4,7 @@ const loadCalc = require('./helpers/load-calc');
 const Calc = loadCalc();
 
 // 収入をデイリー 60 だけにした基本形
-const income = { daily: 60, passOn: false, pass: 90, bpOn: false, bpJade: 680, bpTickets: 4, sim: 0, moc: 0, pf: 0, as: 0, version: 0, versionTickets: 0 };
+const income = { daily: 60, passOn: false, pass: 90, bpTier: 'off', bpJade: 680, bpTickets: 4, bpDeluxeJade: 200, sim: 0, moc: 0, pf: 0, as: 0, version: 0, versionTickets: 0 };
 const base = { today: '2026-09-12', targetDate: '2026-09-12', jade: 0, tickets: 0, pity: 0, guaranteed: false, plannedNow: 0, income };
 
 test('plan: 手持ち 180 連・天井 0・保証なし → 足りる、不足 0', () => {
@@ -37,11 +37,24 @@ test('plan: 残り 40 日 × 60/日 = 2400 星玉 = 15 連が見込みに乗る'
   assert.equal(r.incomePulls, 15);
 });
 
-test('plan: バトルパスのチケットは見込みの連数に含まれる', () => {
-  // 42 日 × (60 + 680/42) 星玉 = 3200 星玉 = 20 連、チケット 4 枚 → 24 連
-  const r = Calc.plan({ ...base, targetDate: '2026-10-24', income: { ...income, bpOn: true } });
-  assert.equal(r.daysLeft, 42);
-  assert.equal(r.incomePulls, 24);
+test('plan: ナナシビトの褒章（星玉・チケット）は日割りせずそのまま見込みに乗る', () => {
+  // レート分: 40日 × 60/日 = 2400星玉 = 15連。褒章分: 680/160=4連 + チケット4枚 = 8連。合計23連
+  const r = Calc.plan({ ...base, targetDate: '2026-10-22', income: { ...income, bpTier: 'hocho' } });
+  assert.equal(r.incomePulls, 15 + 8);
+});
+
+test('plan: ナナシビトの勲章は褒章分＋追加200星玉が乗る', () => {
+  // レート分15連 + (680+200)/160=5連（切り捨て） + チケット4枚 = 24連
+  const r = Calc.plan({ ...base, targetDate: '2026-10-22', income: { ...income, bpTier: 'kunsho' } });
+  assert.equal(r.incomePulls, 15 + 5 + 4);
+});
+
+test('plan: バージョン単位の項目は目標日までの日数が変わっても値が変わらない', () => {
+  const incomeWithFlat = { ...income, bpTier: 'kunsho', moc: 900, pf: 900, as: 900, version: 1600, versionTickets: 8 };
+  const soon = Calc.plan({ ...base, targetDate: '2026-09-14', income: incomeWithFlat });
+  const later = Calc.plan({ ...base, targetDate: '2026-10-22', income: incomeWithFlat });
+  // 差はレート分（デイリー60/日）だけで、バージョン単位の項目は日数によらず一定
+  assert.equal(later.incomePulls - soon.incomePulls, Math.floor(60 * 40 / 160) - Math.floor(60 * 2 / 160));
 });
 
 test('plan: いまのガチャで使う予定が 1 以上なら天井 0・保証なしに置き換える', () => {

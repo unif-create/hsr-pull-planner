@@ -37,7 +37,7 @@ section.card h2 { font-size: 1rem; margin: 0 0 10px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
 .row label { flex: 1; font-size: 0.95rem; }
 .row .unit { color: var(--muted); font-size: 0.85rem; margin-left: 4px; white-space: nowrap; }
-input[type="number"], input[type="date"] {
+input[type="number"], input[type="date"], select {
   width: 130px;
   padding: 8px 10px;
   font-size: 1rem;
@@ -46,6 +46,7 @@ input[type="number"], input[type="date"] {
   background: #fff;
   color: var(--text);
 }
+select { width: auto; max-width: 180px; }
 input[type="number"] { text-align: right; }
 input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--accent); }
 .hint { color: var(--muted); font-size: 0.8rem; margin: 2px 0 0; }
@@ -146,13 +147,24 @@ footer button { margin-top: 12px; }
           <input type="number" id="incPass" min="0" step="1" inputmode="numeric" value="90">
         </div>
         <div class="row">
-          <label for="incBpJade">ナナシの勲章（有料）星玉<span class="unit">／バージョン</span></label>
-          <input type="checkbox" id="incBpOn" aria-label="有料バトルパスを買っている">
+          <label for="incBpTier">ナナシの勲功</label>
+          <select id="incBpTier">
+            <option value="off">買っていない</option>
+            <option value="hocho">ナナシビトの褒章</option>
+            <option value="kunsho">ナナシビトの勲章</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="incBpJade">ナナシビトの褒章 星玉<span class="unit">／バージョン</span></label>
           <input type="number" id="incBpJade" min="0" step="1" inputmode="numeric" value="680">
         </div>
         <div class="row">
-          <label for="incBpTickets">ナナシの勲章（有料）チケット<span class="unit">枚／バージョン</span></label>
+          <label for="incBpTickets">ナナシビトの褒章 チケット<span class="unit">枚／バージョン</span></label>
           <input type="number" id="incBpTickets" min="0" step="1" inputmode="numeric" value="4">
+        </div>
+        <div class="row">
+          <label for="incBpDeluxeJade">ナナシビトの勲章 追加分星玉<span class="unit">／バージョン</span></label>
+          <input type="number" id="incBpDeluxeJade" min="0" step="1" inputmode="numeric" value="200">
         </div>
         <div class="row">
           <label for="incSim">階差宇宙・マネーウォーズ 週間報酬<span class="unit">星玉／週</span></label>
@@ -292,19 +304,24 @@ const Calc = (() => {
     return formatISO(base + n * MS_PER_DAY);
   }
 
-  // 収入の内訳を「1 日あたり」にそろえる（画面には出さない、計算専用の内部換算）
+  // 「／日」「／週」の収入だけを 1 日あたりにそろえる（画面には出さない、計算専用の内部換算）
   function dailyIncome(inc) {
     const jadePerDay =
       num(inc.daily) +
       (inc.passOn ? num(inc.pass) : 0) +
-      (inc.bpOn ? num(inc.bpJade) / VERSION_DAYS : 0) +
-      num(inc.sim) / WEEK_DAYS +
-      (num(inc.moc) + num(inc.pf) + num(inc.as)) / VERSION_DAYS +
-      num(inc.version) / VERSION_DAYS;
-    const ticketsPerDay =
-      (inc.bpOn ? num(inc.bpTickets) / VERSION_DAYS : 0) +
-      num(inc.versionTickets) / VERSION_DAYS;
-    return { jadePerDay, ticketsPerDay };
+      num(inc.sim) / WEEK_DAYS;
+    return { jadePerDay };
+  }
+
+  // 「／バージョン」の項目は日割りしない。目標日までに確実にもらえる分をユーザーがそのまま入力する前提で、
+  // 入力値をそのまま加算する（複数バージョン先が目標なら、その分は自分で数字を足して入力してもらう）
+  // ナナシの勲功: 買っていない(off) / ナナシビトの褒章(hocho) / ナナシビトの勲章(kunsho、褒章＋追加分星玉)
+  function flatIncome(inc) {
+    const bpJade = inc.bpTier === 'off' ? 0 : num(inc.bpJade) + (inc.bpTier === 'kunsho' ? num(inc.bpDeluxeJade) : 0);
+    const bpTickets = inc.bpTier === 'off' ? 0 : num(inc.bpTickets);
+    const jade = bpJade + num(inc.moc) + num(inc.pf) + num(inc.as) + num(inc.version);
+    const tickets = bpTickets + num(inc.versionTickets);
+    return { jade, tickets };
   }
 
   const MAX_PITY = HARD_PITY - 1;
@@ -315,10 +332,14 @@ const Calc = (() => {
 
   function plan(inputs) {
     const daysLeft = daysUntil(inputs.today, inputs.targetDate);
-    const inc = dailyIncome(inputs.income || {});
+    const income = inputs.income || {};
+    const rate = dailyIncome(income);
+    const flat = flatIncome(income);
     const handPulls = toPulls(inputs.jade, inputs.tickets);
-    // 680/42 × 42 のような割り算の往復で 23.9999… になるのを防ぐため、切り捨ての前にごく小さい値を足す
-    const incomePulls = Math.floor((inc.jadePerDay * daysLeft) / JADE_PER_PULL + inc.ticketsPerDay * daysLeft + 1e-9);
+    // 225/7 × 7 のような割り算の往復で 224.9999… になるのを防ぐため、切り捨ての前にごく小さい値を足す
+    const ratePulls = Math.floor((rate.jadePerDay * daysLeft) / JADE_PER_PULL + 1e-9);
+    const flatPulls = toPulls(flat.jade, flat.tickets);
+    const incomePulls = ratePulls + flatPulls;
     const plannedNow = Math.floor(num(inputs.plannedNow));
     const usablePulls = handPulls + incomePulls - plannedNow;
 
@@ -346,7 +367,7 @@ const Calc = (() => {
   return {
     JADE_PER_PULL, HARD_PITY,
     rateAt, fiveStarPmf, probFiveStarWithin, probLimitedWithin, pullsForGuarantee,
-    num, toPulls, daysUntil, addDays, dailyIncome, plan,
+    num, toPulls, daysUntil, addDays, dailyIncome, flatIncome, plan,
   };
 })();
 window.Calc = Calc;
@@ -376,9 +397,10 @@ window.Calc = Calc;
         daily: $('incDaily').value,
         passOn: $('incPassOn').checked,
         pass: $('incPass').value,
-        bpOn: $('incBpOn').checked,
+        bpTier: $('incBpTier').value,
         bpJade: $('incBpJade').value,
         bpTickets: $('incBpTickets').value,
+        bpDeluxeJade: $('incBpDeluxeJade').value,
         sim: $('incSim').value,
         moc: $('incMoc').value,
         pf: $('incPf').value,
@@ -465,9 +487,9 @@ window.Calc = Calc;
 
   const STORAGE_KEY = 'hsr-pull-planner:v1';
   const FIELDS = ['targetDate', 'jade', 'tickets', 'pity', 'plannedNow',
-    'incDaily', 'incPass', 'incBpJade', 'incBpTickets', 'incSim',
+    'incDaily', 'incPass', 'incBpTier', 'incBpJade', 'incBpTickets', 'incBpDeluxeJade', 'incSim',
     'incMoc', 'incPf', 'incAs', 'incVersion', 'incVersionTickets'];
-  const CHECKS = ['guaranteed', 'incPassOn', 'incBpOn'];
+  const CHECKS = ['guaranteed', 'incPassOn'];
 
   // 初期値を控えておき、リセット時に戻す
   const DEFAULTS = {};
