@@ -13,7 +13,6 @@
   --line: #e3e6ee;
   --accent: #4f63d2;
   --safe: #2e9e5b;
-  --close: #d9a300;
   --wait: #d64545;
 }
 * { box-sizing: border-box; }
@@ -63,13 +62,11 @@ details[open] summary::after { content: "閉じる ▾"; }
   font-weight: 700;
   font-size: 1.05rem;
 }
-.verdict.safe { background: var(--safe); }
-.verdict.close { background: var(--close); }
-.verdict.wait { background: var(--wait); }
-.prob { font-size: 2.2rem; font-weight: 700; margin: 8px 0 0; }
-.prob small { font-size: 1rem; color: var(--muted); font-weight: 400; margin-left: 6px; }
+.verdict.enough { background: var(--safe); }
+.verdict.short { background: var(--wait); }
+.prob { font-size: 2rem; font-weight: 700; margin: 8px 0 0; }
+.prob small { font-size: 1.1rem; color: var(--muted); font-weight: 400; margin-left: 4px; }
 .basis { margin: 8px 0 0; }
-.shortfall { margin: 10px 0 0; padding: 10px 12px; background: #fff4f4; border-radius: 8px; }
 .note { color: var(--muted); font-size: 0.85rem; margin: 10px 0 0; }
 .warn { color: var(--wait); font-size: 0.9rem; margin: 6px 0 0; }
 button {
@@ -100,7 +97,7 @@ footer button { margin-top: 12px; }
         <label for="targetDate">開始日</label>
         <input type="date" id="targetDate">
       </div>
-      <p class="hint">公式の告知やリーク情報を見て、自分で入れてください。</p>
+      <p class="hint">公式の告知を見て、自分で入れてください。</p>
     </section>
 
     <section class="card">
@@ -138,8 +135,7 @@ footer button { margin-top: 12px; }
 
     <section class="card">
       <details id="incomeDetails">
-        <summary>5. 収入の目安　<span id="incomeSummary">—</span></summary>
-        <p class="hint">初期値は目安です。自分のプレイに合わせて直してください。週は ÷7、バージョン（42 日）は ÷42 で 1 日あたりに換算します。</p>
+        <summary>5. 収入の目安</summary>
         <div class="row">
           <label for="incDaily">デイリー任務<span class="unit">星玉／日</span></label>
           <input type="number" id="incDaily" min="0" step="1" inputmode="numeric" value="60">
@@ -159,16 +155,28 @@ footer button { margin-top: 12px; }
           <input type="number" id="incBpTickets" min="0" step="1" inputmode="numeric" value="4">
         </div>
         <div class="row">
-          <label for="incSim">模擬宇宙・差分宇宙 週間報酬<span class="unit">星玉／週</span></label>
+          <label for="incSim">階差宇宙・マネーウォーズ 週間報酬<span class="unit">星玉／週</span></label>
           <input type="number" id="incSim" min="0" step="1" inputmode="numeric" value="225">
         </div>
         <div class="row">
-          <label for="incEndgame">忘却の庭・虚構叙事・末日の幻影 合計<span class="unit">星玉／42 日</span></label>
-          <input type="number" id="incEndgame" min="0" step="1" inputmode="numeric" value="0" placeholder="目安を自分で入れる">
+          <label for="incMoc">混沌の記憶<span class="unit">星玉／バージョン</span></label>
+          <input type="number" id="incMoc" min="0" step="1" inputmode="numeric" value="900">
+        </div>
+        <div class="row">
+          <label for="incPf">虚構叙事<span class="unit">星玉／バージョン</span></label>
+          <input type="number" id="incPf" min="0" step="1" inputmode="numeric" value="900">
+        </div>
+        <div class="row">
+          <label for="incAs">末日の幻影<span class="unit">星玉／バージョン</span></label>
+          <input type="number" id="incAs" min="0" step="1" inputmode="numeric" value="900">
         </div>
         <div class="row">
           <label for="incVersion">バージョン更新の臨時収入（イベント・補償・コード）<span class="unit">星玉／バージョン</span></label>
           <input type="number" id="incVersion" min="0" step="1" inputmode="numeric" value="0" placeholder="目安を自分で入れる">
+        </div>
+        <div class="row">
+          <label for="incVersionTickets">バージョン更新の臨時収入（巡星の礼など）<span class="unit">チケット／バージョン</span></label>
+          <input type="number" id="incVersionTickets" min="0" step="1" inputmode="numeric" value="0" placeholder="目安を自分で入れる">
         </div>
       </details>
     </section>
@@ -177,9 +185,8 @@ footer button { margin-top: 12px; }
   <section class="card result" id="result">
     <h2>結果</h2>
     <span class="verdict" id="verdict">—</span>
-    <p class="prob"><span id="probability">—</span><small>目標日までに引ける確率</small></p>
+    <p class="prob" id="headline">—</p>
     <p class="basis" id="basis">—</p>
-    <div class="shortfall" id="shortfall" hidden></div>
     <p class="warn" id="warn" hidden></p>
     <p class="note" id="note"></p>
     <div class="actions">
@@ -285,16 +292,18 @@ const Calc = (() => {
     return formatISO(base + n * MS_PER_DAY);
   }
 
-  // 収入の内訳を「1 日あたり」にそろえる
+  // 収入の内訳を「1 日あたり」にそろえる（画面には出さない、計算専用の内部換算）
   function dailyIncome(inc) {
     const jadePerDay =
       num(inc.daily) +
       (inc.passOn ? num(inc.pass) : 0) +
       (inc.bpOn ? num(inc.bpJade) / VERSION_DAYS : 0) +
       num(inc.sim) / WEEK_DAYS +
-      num(inc.endgame) / VERSION_DAYS +
+      (num(inc.moc) + num(inc.pf) + num(inc.as)) / VERSION_DAYS +
       num(inc.version) / VERSION_DAYS;
-    const ticketsPerDay = inc.bpOn ? num(inc.bpTickets) / VERSION_DAYS : 0;
+    const ticketsPerDay =
+      (inc.bpOn ? num(inc.bpTickets) / VERSION_DAYS : 0) +
+      num(inc.versionTickets) / VERSION_DAYS;
     return { jadePerDay, ticketsPerDay };
   }
 
@@ -319,30 +328,17 @@ const Calc = (() => {
     const state = pityReset ? { pity: 0, guaranteed: false } : { pity, guaranteed: !!inputs.guaranteed };
 
     const guaranteeNeeded = pullsForGuarantee(state);
-    const enough = usablePulls >= guaranteeNeeded;
-    const probability = enough ? 1 : probLimitedWithin(state, usablePulls);
-    const verdict = enough ? 'safe' : probability >= 0.5 ? 'close' : 'wait';
-
     const shortfallPulls = Math.max(0, guaranteeNeeded - usablePulls);
     const shortfallJade = shortfallPulls * JADE_PER_PULL;
-
-    // 1 日あたり収入を連数にそろえ、不足分を貯めるのに何日かかるかを目標日から数える
-    const pullsPerDay = inc.jadePerDay / JADE_PER_PULL + inc.ticketsPerDay;
-    let waitDays = null;
-    let waitUntil = null;
-    if (shortfallPulls > 0 && pullsPerDay > 0) {
-      waitDays = Math.ceil(shortfallPulls / pullsPerDay);
-      waitUntil = addDays(inputs.today, daysLeft + waitDays);
-    }
+    const verdict = shortfallPulls === 0 ? 'enough' : 'short';
 
     const warnings = [];
     if (plannedNow > handPulls) warnings.push('planned_exceeds_hand');
 
     return {
       daysLeft, handPulls, incomePulls, plannedNow, usablePulls,
-      state, pityReset, guaranteeNeeded, probability, verdict,
-      shortfallPulls, shortfallJade, waitDays, waitUntil,
-      jadePerDay: inc.jadePerDay + inc.ticketsPerDay * JADE_PER_PULL,
+      state, pityReset, guaranteeNeeded, verdict,
+      shortfallPulls, shortfallJade,
       warnings,
     };
   }
@@ -359,7 +355,7 @@ window.Calc = Calc;
 (() => {
   const $ = (id) => document.getElementById(id);
 
-  const VERDICT_LABEL = { safe: '余裕', close: 'ギリギリ', wait: '今は待て' };
+  const VERDICT_LABEL = { enough: '足りる', short: '足りない' };
 
   function todayISO() {
     const d = new Date();
@@ -384,8 +380,11 @@ window.Calc = Calc;
         bpJade: $('incBpJade').value,
         bpTickets: $('incBpTickets').value,
         sim: $('incSim').value,
-        endgame: $('incEndgame').value,
+        moc: $('incMoc').value,
+        pf: $('incPf').value,
+        as: $('incAs').value,
         version: $('incVersion').value,
+        versionTickets: $('incVersionTickets').value,
       },
     };
   }
@@ -404,22 +403,13 @@ window.Calc = Calc;
     v.textContent = VERDICT_LABEL[r.verdict];
     v.className = `verdict ${r.verdict}`;
 
-    $('probability').textContent = `${Math.round(r.probability * 100)}%`;
+    $('headline').innerHTML = r.verdict === 'enough'
+      ? '足りています'
+      : `あと ${fmtNum(r.shortfallPulls)}<small>連</small>（星玉 ${fmtNum(r.shortfallJade)}個）`;
 
     $('basis').textContent =
-      `手持ち ${fmtNum(r.handPulls)}連 ＋ 見込み ${fmtNum(r.incomePulls)}連（${r.daysLeft}日 × 1日あたり ${fmtNum(Math.round(r.jadePerDay))}個）` +
+      `手持ち ${fmtNum(r.handPulls)}連 ＋ 見込み ${fmtNum(r.incomePulls)}連（目標日までの ${r.daysLeft}日分の収入）` +
       ` − 使う ${fmtNum(r.plannedNow)}連 ＝ ${fmtNum(r.usablePulls)}連。確定まで ${fmtNum(r.guaranteeNeeded)}連。`;
-
-    const s = $('shortfall');
-    if (r.shortfallPulls > 0) {
-      let text = `不足 ${fmtNum(r.shortfallPulls)}連（星玉 ${fmtNum(r.shortfallJade)}個）。`;
-      if (r.waitUntil) text += ` ${fmtDate(r.waitUntil)} まで待てば確定に届きます（目標日から ${fmtNum(r.waitDays)}日）。`;
-      else text += ' 1 日あたりの収入が 0 なので、このままでは貯まりません。';
-      s.textContent = text;
-      s.hidden = false;
-    } else {
-      s.hidden = true;
-    }
 
     const w = $('warn');
     if (r.warnings.includes('planned_exceeds_hand')) {
@@ -431,21 +421,13 @@ window.Calc = Calc;
 
     const notes = [];
     if (r.pityReset) notes.push('いまのガチャを引き切る前提なので、目標のガチャは天井 0・保証なしから計算しています。');
-    notes.push('収入の目安は初期値です。実際の収入に合わせて「5. 収入の目安」を直してください。');
     $('note').textContent = notes.join(' ');
-  }
-
-  function renderIncomeSummary(inputs) {
-    const inc = Calc.dailyIncome(inputs.income);
-    const perDay = inc.jadePerDay + inc.ticketsPerDay * Calc.JADE_PER_PULL;
-    $('incomeSummary').textContent = `1 日あたり ${fmtNum(Math.round(perDay))} 個`;
   }
 
   let lastResult = null;
 
   function update() {
     const inputs = readInputs();
-    renderIncomeSummary(inputs);
     lastResult = Calc.plan(inputs);
     render(lastResult);
   }
@@ -453,12 +435,10 @@ window.Calc = Calc;
   function buildShareText(inputs, r) {
     const lines = [];
     lines.push(`【スタレ ガチャ計画】目標 ${inputs.targetDate ? fmtDate(inputs.targetDate) : '未設定'}`);
-    lines.push(`判定: ${VERDICT_LABEL[r.verdict]} ／ 引ける確率 ${Math.round(r.probability * 100)}%`);
+    lines.push(`判定: ${VERDICT_LABEL[r.verdict]}`);
     lines.push(`手持ち ${r.handPulls}連 ＋ 見込み ${r.incomePulls}連 − 使う ${r.plannedNow}連 ＝ ${r.usablePulls}連（確定まで ${r.guaranteeNeeded}連）`);
     if (r.shortfallPulls > 0) {
-      let s = `不足 ${r.shortfallPulls}連（星玉 ${r.shortfallJade}個）`;
-      if (r.waitUntil) s += `。${fmtDate(r.waitUntil)} まで待てば確定`;
-      lines.push(s);
+      lines.push(`不足 ${r.shortfallPulls}連（星玉 ${r.shortfallJade}個）`);
     }
     lines.push(location.href.split('#')[0]);
     return lines.join('\n');
@@ -485,7 +465,8 @@ window.Calc = Calc;
 
   const STORAGE_KEY = 'hsr-pull-planner:v1';
   const FIELDS = ['targetDate', 'jade', 'tickets', 'pity', 'plannedNow',
-    'incDaily', 'incPass', 'incBpJade', 'incBpTickets', 'incSim', 'incEndgame', 'incVersion'];
+    'incDaily', 'incPass', 'incBpJade', 'incBpTickets', 'incSim',
+    'incMoc', 'incPf', 'incAs', 'incVersion', 'incVersionTickets'];
   const CHECKS = ['guaranteed', 'incPassOn', 'incBpOn'];
 
   // 初期値を控えておき、リセット時に戻す

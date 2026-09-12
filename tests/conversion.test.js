@@ -35,7 +35,7 @@ test('addDays: 月またぎ・年またぎ', () => {
   assert.equal(Calc.addDays('2026-12-25', 10), '2027-01-04');
 });
 
-const baseIncome = { daily: 60, passOn: false, pass: 90, bpOn: false, bpJade: 680, bpTickets: 4, sim: 0, endgame: 0, version: 0 };
+const baseIncome = { daily: 60, passOn: false, pass: 90, bpOn: false, bpJade: 680, bpTickets: 4, sim: 0, moc: 0, pf: 0, as: 0, version: 0, versionTickets: 0 };
 
 test('dailyIncome: デイリーだけなら 60/日、チケット 0', () => {
   const r = Calc.dailyIncome(baseIncome);
@@ -53,9 +53,14 @@ test('dailyIncome: バトルパス ON で 680/42 星玉と 4/42 チケットが 
   near(r.ticketsPerDay, 4 / 42);
 });
 
-test('dailyIncome: 週は ÷7、バージョンは ÷42', () => {
-  const r = Calc.dailyIncome({ ...baseIncome, sim: 225, endgame: 840, version: 1600 });
-  near(r.jadePerDay, 60 + 225 / 7 + 840 / 42 + 1600 / 42);
+test('dailyIncome: 週は ÷7、バージョンは ÷42（忘却の庭系 3 つは合算して ÷42）', () => {
+  const r = Calc.dailyIncome({ ...baseIncome, sim: 225, moc: 900, pf: 900, as: 900, version: 1600 });
+  near(r.jadePerDay, 60 + 225 / 7 + (900 + 900 + 900) / 42 + 1600 / 42);
+});
+
+test('dailyIncome: バージョン更新の臨時チケットも ÷42 でチケットに乗る', () => {
+  const r = Calc.dailyIncome({ ...baseIncome, versionTickets: 8 });
+  near(r.ticketsPerDay, 8 / 42);
 });
 
 test('dailyIncome: 空欄や負の値は 0 として扱う', () => {
