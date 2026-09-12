@@ -111,10 +111,59 @@ const Calc = (() => {
     return { jadePerDay, ticketsPerDay };
   }
 
+  const MAX_PITY = HARD_PITY - 1;
+
+  function clamp(v, lo, hi) {
+    return Math.min(hi, Math.max(lo, v));
+  }
+
+  function plan(inputs) {
+    const daysLeft = daysUntil(inputs.today, inputs.targetDate);
+    const inc = dailyIncome(inputs.income || {});
+    const handPulls = toPulls(inputs.jade, inputs.tickets);
+    // 680/42 × 42 のような割り算の往復で 23.9999… になるのを防ぐため、切り捨ての前にごく小さい値を足す
+    const incomePulls = Math.floor((inc.jadePerDay * daysLeft) / JADE_PER_PULL + inc.ticketsPerDay * daysLeft + 1e-9);
+    const plannedNow = Math.floor(num(inputs.plannedNow));
+    const usablePulls = handPulls + incomePulls - plannedNow;
+
+    // いまのガチャを引き切る前提なら、目標ガチャは天井 0・保証なしから始まる
+    const pityReset = plannedNow >= 1;
+    const pity = clamp(Math.floor(num(inputs.pity)), 0, MAX_PITY);
+    const state = pityReset ? { pity: 0, guaranteed: false } : { pity, guaranteed: !!inputs.guaranteed };
+
+    const guaranteeNeeded = pullsForGuarantee(state);
+    const enough = usablePulls >= guaranteeNeeded;
+    const probability = enough ? 1 : probLimitedWithin(state, usablePulls);
+    const verdict = enough ? 'safe' : probability >= 0.5 ? 'close' : 'wait';
+
+    const shortfallPulls = Math.max(0, guaranteeNeeded - usablePulls);
+    const shortfallJade = shortfallPulls * JADE_PER_PULL;
+
+    // 1 日あたり収入を連数にそろえ、不足分を貯めるのに何日かかるかを目標日から数える
+    const pullsPerDay = inc.jadePerDay / JADE_PER_PULL + inc.ticketsPerDay;
+    let waitDays = null;
+    let waitUntil = null;
+    if (shortfallPulls > 0 && pullsPerDay > 0) {
+      waitDays = Math.ceil(shortfallPulls / pullsPerDay);
+      waitUntil = addDays(inputs.today, daysLeft + waitDays);
+    }
+
+    const warnings = [];
+    if (plannedNow > handPulls) warnings.push('planned_exceeds_hand');
+
+    return {
+      daysLeft, handPulls, incomePulls, plannedNow, usablePulls,
+      state, pityReset, guaranteeNeeded, probability, verdict,
+      shortfallPulls, shortfallJade, waitDays, waitUntil,
+      jadePerDay: inc.jadePerDay + inc.ticketsPerDay * JADE_PER_PULL,
+      warnings,
+    };
+  }
+
   return {
     JADE_PER_PULL, HARD_PITY,
     rateAt, fiveStarPmf, probFiveStarWithin, probLimitedWithin, pullsForGuarantee,
-    num, toPulls, daysUntil, addDays, dailyIncome,
+    num, toPulls, daysUntil, addDays, dailyIncome, plan,
   };
 })();
 window.Calc = Calc;
