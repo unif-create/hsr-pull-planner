@@ -37,7 +37,7 @@ section.card {
 section.card h2 { font-size: 1rem; margin: 0 0 10px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
 .row label { flex: 1; font-size: 0.95rem; }
-.row .unit { color: var(--muted); font-size: 0.85rem; margin-left: 4px; }
+.row .unit { color: var(--muted); font-size: 0.85rem; margin-left: 4px; white-space: nowrap; }
 input[type="number"], input[type="date"] {
   width: 130px;
   padding: 8px 10px;
@@ -51,6 +51,7 @@ input[type="number"] { text-align: right; }
 input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--accent); }
 .hint { color: var(--muted); font-size: 0.8rem; margin: 2px 0 0; }
 details summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; }
+details summary::-webkit-details-marker { display: none; }
 details summary::after { content: "内訳を直す ▸"; color: var(--accent); font-weight: 400; font-size: 0.9rem; }
 details[open] summary::after { content: "閉じる ▾"; }
 .result { border-width: 2px; }
@@ -279,7 +280,9 @@ const Calc = (() => {
   }
 
   function addDays(iso, n) {
-    return formatISO(parseISO(iso) + n * MS_PER_DAY);
+    const base = parseISO(iso);
+    if (base === null) return null;
+    return formatISO(base + n * MS_PER_DAY);
   }
 
   // 収入の内訳を「1 日あたり」にそろえる
@@ -516,7 +519,10 @@ window.Calc = Calc;
     update();
   }
 
-  $('form').addEventListener('input', () => { update(); save(); });
+  // チェックボックスは古い Safari だと input を出さないので change も拾う
+  const onChange = () => { update(); save(); };
+  $('form').addEventListener('input', onChange);
+  $('form').addEventListener('change', onChange);
   $('reset').addEventListener('click', reset);
   $('copy').addEventListener('click', copyResult);
   load();
