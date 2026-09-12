@@ -181,9 +181,14 @@ footer button { margin-top: 12px; }
     <div class="shortfall" id="shortfall" hidden></div>
     <p class="warn" id="warn" hidden></p>
     <p class="note" id="note"></p>
+    <div class="actions">
+      <button type="button" id="copy">結果をコピー</button>
+      <span class="toast" id="toast" hidden>コピーしました</span>
+    </div>
   </section>
 
   <footer>
+    <p>非公式のファンツールです。HoYoverse とは関係ありません。<br>作者: ユニフ（Unif）</p>
     <button type="button" class="secondary" id="reset">入力をリセット</button>
   </footer>
 </main>
@@ -433,10 +438,46 @@ window.Calc = Calc;
     $('incomeSummary').textContent = `1 日あたり ${fmtNum(Math.round(perDay))} 個`;
   }
 
+  let lastResult = null;
+
   function update() {
     const inputs = readInputs();
     renderIncomeSummary(inputs);
-    render(Calc.plan(inputs));
+    lastResult = Calc.plan(inputs);
+    render(lastResult);
+  }
+
+  function buildShareText(inputs, r) {
+    const lines = [];
+    lines.push(`【スタレ ガチャ計画】目標 ${inputs.targetDate ? fmtDate(inputs.targetDate) : '未設定'}`);
+    lines.push(`判定: ${VERDICT_LABEL[r.verdict]} ／ 引ける確率 ${Math.round(r.probability * 100)}%`);
+    lines.push(`手持ち ${r.handPulls}連 ＋ 見込み ${r.incomePulls}連 − 使う ${r.plannedNow}連 ＝ ${r.usablePulls}連（確定まで ${r.guaranteeNeeded}連）`);
+    if (r.shortfallPulls > 0) {
+      let s = `不足 ${r.shortfallPulls}連（星玉 ${r.shortfallJade}個）`;
+      if (r.waitUntil) s += `。${fmtDate(r.waitUntil)} まで待てば確定`;
+      lines.push(s);
+    }
+    lines.push(location.href.split('#')[0]);
+    return lines.join('\n');
+  }
+
+  async function copyResult() {
+    if (!lastResult) return;
+    const text = buildShareText(readInputs(), lastResult);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (e) {
+      // クリップボード API が使えない環境向けの逃げ道
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    const t = $('toast');
+    t.hidden = false;
+    setTimeout(() => { t.hidden = true; }, 2000);
   }
 
   const STORAGE_KEY = 'hsr-pull-planner:v1';
@@ -477,10 +518,11 @@ window.Calc = Calc;
 
   $('form').addEventListener('input', () => { update(); save(); });
   $('reset').addEventListener('click', reset);
+  $('copy').addEventListener('click', copyResult);
   load();
   update();
 
-  window.App = { readInputs, render, update, save, load, reset };
+  window.App = { readInputs, render, update, save, load, reset, buildShareText };
 })();
 </script>
 </body>
