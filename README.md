@@ -24,4 +24,4 @@
 
 ## 公開 URL
 
-（公開後に書く）
+https://unif-create.github.io/hsr-pull-planner/
