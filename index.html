@@ -62,7 +62,60 @@ const Calc = (() => {
     return (state.guaranteed ? HARD_PITY : HARD_PITY * 2) - state.pity;
   }
 
-  return { JADE_PER_PULL, HARD_PITY, rateAt, fiveStarPmf, probFiveStarWithin, probLimitedWithin, pullsForGuarantee };
+  const VERSION_DAYS = 42;
+  const WEEK_DAYS = 7;
+  const MS_PER_DAY = 86400000;
+
+  // 空欄・NaN・負の値は 0 にそろえる
+  function num(v) {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  function toPulls(jade, tickets) {
+    return Math.floor(num(jade) / JADE_PER_PULL) + Math.floor(num(tickets));
+  }
+
+  // 'YYYY-MM-DD' を UTC の日付にする（時差や夏時間で日数がずれないように）
+  function parseISO(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    if (!m) return null;
+    return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  }
+
+  function formatISO(ms) {
+    return new Date(ms).toISOString().slice(0, 10);
+  }
+
+  function daysUntil(todayISO, targetISO) {
+    const t = parseISO(todayISO);
+    const g = parseISO(targetISO);
+    if (t === null || g === null) return 0;
+    return Math.max(0, Math.round((g - t) / MS_PER_DAY));
+  }
+
+  function addDays(iso, n) {
+    return formatISO(parseISO(iso) + n * MS_PER_DAY);
+  }
+
+  // 収入の内訳を「1 日あたり」にそろえる
+  function dailyIncome(inc) {
+    const jadePerDay =
+      num(inc.daily) +
+      (inc.passOn ? num(inc.pass) : 0) +
+      (inc.bpOn ? num(inc.bpJade) / VERSION_DAYS : 0) +
+      num(inc.sim) / WEEK_DAYS +
+      num(inc.endgame) / VERSION_DAYS +
+      num(inc.version) / VERSION_DAYS;
+    const ticketsPerDay = inc.bpOn ? num(inc.bpTickets) / VERSION_DAYS : 0;
+    return { jadePerDay, ticketsPerDay };
+  }
+
+  return {
+    JADE_PER_PULL, HARD_PITY,
+    rateAt, fiveStarPmf, probFiveStarWithin, probLimitedWithin, pullsForGuarantee,
+    num, toPulls, daysUntil, addDays, dailyIncome,
+  };
 })();
 window.Calc = Calc;
 </script>
