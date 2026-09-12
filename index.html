@@ -10,7 +10,59 @@
 <body>
 <script id="calc">
 const Calc = (() => {
-  return {};
+  const JADE_PER_PULL = 160;
+  const HARD_PITY = 90;
+  const SOFT_PITY_START = 74;
+  const BASE_RATE = 0.006;
+  const SOFT_STEP = 0.06;
+  const WIN_RATE = 0.5;
+
+  // i 連目（1〜90）の 5★ 排出率
+  function rateAt(i) {
+    if (i >= HARD_PITY) return 1;
+    if (i < SOFT_PITY_START) return BASE_RATE;
+    return Math.min(1, BASE_RATE + SOFT_STEP * (i - (SOFT_PITY_START - 1)));
+  }
+
+  // pmf[k] = 天井 pity の状態から、いまから k 連目で初めて 5★ が出る確率。pmf[0] = 0
+  function fiveStarPmf(pity) {
+    const pmf = [0];
+    let alive = 1; // まだ 5★ が出ていない確率
+    for (let k = 1; pity + k <= HARD_PITY; k++) {
+      const r = rateAt(pity + k);
+      pmf.push(alive * r);
+      alive *= 1 - r;
+    }
+    return pmf;
+  }
+
+  // n 連以内に 5★ が出る確率
+  function probFiveStarWithin(pity, n) {
+    const pmf = fiveStarPmf(pity);
+    let s = 0;
+    for (let k = 1; k <= n && k < pmf.length; k++) s += pmf[k];
+    return Math.min(1, s);
+  }
+
+  // n 連以内に目標キャラ（ピックアップ）を引ける確率
+  // 保証なし: 1 回目の 5★ で勝つ 50% ＋ すり抜けて残りの連数で 2 回目の 5★ を引く 50%
+  function probLimitedWithin(state, n) {
+    if (n <= 0) return 0;
+    const pmf = fiveStarPmf(state.pity);
+    let s = 0;
+    for (let k = 1; k <= n && k < pmf.length; k++) {
+      if (state.guaranteed) s += pmf[k];
+      else s += pmf[k] * (WIN_RATE + (1 - WIN_RATE) * probFiveStarWithin(0, n - k));
+    }
+    return Math.min(1, s);
+  }
+
+  // 確定に必要な連数（最悪ケース）
+  function pullsForGuarantee(state) {
+    return (state.guaranteed ? HARD_PITY : HARD_PITY * 2) - state.pity;
+  }
+
+  return { JADE_PER_PULL, HARD_PITY, rateAt, fiveStarPmf, probFiveStarWithin, probLimitedWithin, pullsForGuarantee };
 })();
 window.Calc = Calc;
 </script>
