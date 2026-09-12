@@ -182,6 +182,10 @@ footer button { margin-top: 12px; }
     <p class="warn" id="warn" hidden></p>
     <p class="note" id="note"></p>
   </section>
+
+  <footer>
+    <button type="button" class="secondary" id="reset">入力をリセット</button>
+  </footer>
 </main>
 <script id="calc">
 const Calc = (() => {
@@ -435,10 +439,48 @@ window.Calc = Calc;
     render(Calc.plan(inputs));
   }
 
-  $('form').addEventListener('input', update);
+  const STORAGE_KEY = 'hsr-pull-planner:v1';
+  const FIELDS = ['targetDate', 'jade', 'tickets', 'pity', 'plannedNow',
+    'incDaily', 'incPass', 'incBpJade', 'incBpTickets', 'incSim', 'incEndgame', 'incVersion'];
+  const CHECKS = ['guaranteed', 'incPassOn', 'incBpOn'];
+
+  // 初期値を控えておき、リセット時に戻す
+  const DEFAULTS = {};
+  FIELDS.forEach((id) => { DEFAULTS[id] = $(id).value; });
+  CHECKS.forEach((id) => { DEFAULTS[id] = $(id).checked; });
+
+  function save() {
+    try {
+      const data = {};
+      FIELDS.forEach((id) => { data[id] = $(id).value; });
+      CHECKS.forEach((id) => { data[id] = $(id).checked; });
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (e) { /* プライベートモードなどで保存できないときは黙って続ける */ }
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      FIELDS.forEach((id) => { if (id in data) $(id).value = data[id]; });
+      CHECKS.forEach((id) => { if (id in data) $(id).checked = !!data[id]; });
+    } catch (e) { /* 壊れた保存データは無視する */ }
+  }
+
+  function reset() {
+    FIELDS.forEach((id) => { $(id).value = DEFAULTS[id]; });
+    CHECKS.forEach((id) => { $(id).checked = DEFAULTS[id]; });
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* 同上 */ }
+    update();
+  }
+
+  $('form').addEventListener('input', () => { update(); save(); });
+  $('reset').addEventListener('click', reset);
+  load();
   update();
 
-  window.App = { readInputs, render, update };
+  window.App = { readInputs, render, update, save, load, reset };
 })();
 </script>
 </body>
