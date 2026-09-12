@@ -173,7 +173,15 @@ footer button { margin-top: 12px; }
     </section>
   </form>
 
-  <section class="card result" id="result"></section>
+  <section class="card result" id="result">
+    <h2>結果</h2>
+    <span class="verdict" id="verdict">—</span>
+    <p class="prob"><span id="probability">—</span><small>目標日までに引ける確率</small></p>
+    <p class="basis" id="basis">—</p>
+    <div class="shortfall" id="shortfall" hidden></div>
+    <p class="warn" id="warn" hidden></p>
+    <p class="note" id="note"></p>
+  </section>
 </main>
 <script id="calc">
 const Calc = (() => {
@@ -336,6 +344,102 @@ const Calc = (() => {
 window.Calc = Calc;
 </script>
 <script id="ui">
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  const VERDICT_LABEL = { safe: '余裕', close: 'ギリギリ', wait: '今は待て' };
+
+  function todayISO() {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+
+  function readInputs() {
+    return {
+      today: todayISO(),
+      targetDate: $('targetDate').value,
+      jade: $('jade').value,
+      tickets: $('tickets').value,
+      pity: $('pity').value,
+      guaranteed: $('guaranteed').checked,
+      plannedNow: $('plannedNow').value,
+      income: {
+        daily: $('incDaily').value,
+        passOn: $('incPassOn').checked,
+        pass: $('incPass').value,
+        bpOn: $('incBpOn').checked,
+        bpJade: $('incBpJade').value,
+        bpTickets: $('incBpTickets').value,
+        sim: $('incSim').value,
+        endgame: $('incEndgame').value,
+        version: $('incVersion').value,
+      },
+    };
+  }
+
+  function fmtDate(iso) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return `${y}/${m}/${d}`;
+  }
+
+  function fmtNum(n) {
+    return n.toLocaleString('ja-JP');
+  }
+
+  function render(r) {
+    const v = $('verdict');
+    v.textContent = VERDICT_LABEL[r.verdict];
+    v.className = `verdict ${r.verdict}`;
+
+    $('probability').textContent = `${Math.round(r.probability * 100)}%`;
+
+    $('basis').textContent =
+      `手持ち ${fmtNum(r.handPulls)}連 ＋ 見込み ${fmtNum(r.incomePulls)}連（${r.daysLeft}日 × 1日あたり ${fmtNum(Math.round(r.jadePerDay))}個）` +
+      ` − 使う ${fmtNum(r.plannedNow)}連 ＝ ${fmtNum(r.usablePulls)}連。確定まで ${fmtNum(r.guaranteeNeeded)}連。`;
+
+    const s = $('shortfall');
+    if (r.shortfallPulls > 0) {
+      let text = `不足 ${fmtNum(r.shortfallPulls)}連（星玉 ${fmtNum(r.shortfallJade)}個）。`;
+      if (r.waitUntil) text += ` ${fmtDate(r.waitUntil)} まで待てば確定に届きます（目標日から ${fmtNum(r.waitDays)}日）。`;
+      else text += ' 1 日あたりの収入が 0 なので、このままでは貯まりません。';
+      s.textContent = text;
+      s.hidden = false;
+    } else {
+      s.hidden = true;
+    }
+
+    const w = $('warn');
+    if (r.warnings.includes('planned_exceeds_hand')) {
+      w.textContent = '「いまのガチャで使う連数」が手持ちを超えています。数字はそのまま計算しています。';
+      w.hidden = false;
+    } else {
+      w.hidden = true;
+    }
+
+    const notes = [];
+    if (r.pityReset) notes.push('いまのガチャを引き切る前提なので、目標のガチャは天井 0・保証なしから計算しています。');
+    notes.push('収入の目安は初期値です。実際の収入に合わせて「5. 収入の目安」を直してください。');
+    $('note').textContent = notes.join(' ');
+  }
+
+  function renderIncomeSummary(inputs) {
+    const inc = Calc.dailyIncome(inputs.income);
+    const perDay = inc.jadePerDay + inc.ticketsPerDay * Calc.JADE_PER_PULL;
+    $('incomeSummary').textContent = `1 日あたり ${fmtNum(Math.round(perDay))} 個`;
+  }
+
+  function update() {
+    const inputs = readInputs();
+    renderIncomeSummary(inputs);
+    render(Calc.plan(inputs));
+  }
+
+  $('form').addEventListener('input', update);
+  update();
+
+  window.App = { readInputs, render, update };
+})();
 </script>
 </body>
 </html>
